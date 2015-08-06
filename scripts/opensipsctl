@@ -921,23 +921,23 @@ db_ops() {
 	case $1 in
 		exec|query)
 			shift
-			if [ $# -ne 1 ] ; then
+			if [ $# -lt 1 ] ; then
 				merr "missing query parameter"
 				exit 1
 			fi
-			$DBCMD "$1"
+			$DBCMD "$1" "$2"
 			;;
 		roexec|roquery)
 			shift
-			if [ $# -ne 1 ] ; then
+			if [ $# -lt 1 ] ; then
 				merr "missing query parameter"
 				exit 1
 			fi
-			$DBCMD "$1"
+			$DBCMD "$1" "$2"
 			;;
 		run)
 			shift
-			if [ $# -ne 1 ] ; then
+			if [ $# -lt 1 ] ; then
 				merr "missing query parameter"
 				exit 1
 			fi
@@ -946,11 +946,11 @@ db_ops() {
 				merr "missing query value"
 				exit 1
 			fi
-			$DBCMD "$QUERY"
+			$DBCMD "$QUERY" "$2"
 			;;
 		rorun)
 			shift
-			if [ $# -ne 1 ] ; then
+			if [ $# -lt 1 ] ; then
 				merr "missing query parameter"
 				exit 1
 			fi
@@ -959,16 +959,16 @@ db_ops() {
 				merr "missing query value"
 				exit 1
 			fi
-			$DBCMD "$QUERY"
+			$DBCMD "$QUERY" "$2"
 			;;
 		show)
 			shift
-			if [ $# -ne 1 ] ; then
+			if [ $# -lt 1 ] ; then
 				merr "missing table parameter"
 				exit 1
 			fi
 			QUERY="select * FROM $1;"
-			$DBCMD "$QUERY"
+			$DBCMD "$QUERY" "$2"
 			;;
 		*)
 			usage_db_ops
