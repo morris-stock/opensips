@@ -172,10 +172,11 @@ static param_export_t params[] = {
 	{"attr_column",        STR_PARAM, &attr_col.s        },
 	{"matching_mode",      INT_PARAM, &matching_mode     },
 	{"cseq_delay",         INT_PARAM, &cseq_delay        },
+	{"cseq_ignore",        INT_PARAM, &cseq_ignore       },
 	{"hash_size",          INT_PARAM, &ul_hash_size      },
 	{"nat_bflag",          STR_PARAM, &nat_bflag_str     },
 	{"nat_bflag",          INT_PARAM, &nat_bflag         },
-    /* data replication through UDP binary packets */
+	/* data replication through UDP binary packets */
 	{ "accept_replicated_contacts",INT_PARAM, &accept_replicated_udata },
 	{ "replicate_contacts_to",     STR_PARAM|USE_FUNC_PARAM,
 	                            (void *)add_replication_dest           },
