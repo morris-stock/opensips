@@ -951,22 +951,22 @@ ok:
 	TCPCONN_UNLOCK;
 #ifdef EXTRA_DEBUG
 	if (a) LM_DBG("alias already present\n");
-	else   LM_DBG("alias port %d for hash %d, id %d\n", port, hash, c->id);
+	else   LM_DBG("alias port %d for hash %d, id %d\n", port, hash, id);
 #endif
 	return 0;
 error_aliases:
 	TCPCONN_UNLOCK;
-	LM_ERR("too many aliases for connection %p (%d)\n", c, c->id);
+	LM_INFO("too many aliases for connection %p (%d)\n", c, id);
 	return -1;
 error_not_found:
 	TCPCONN_UNLOCK;
 	LM_ERR("no connection found for id %d\n",id);
 	return -1;
 error_sec:
+	LM_INFO("possible port hijack attempt\n");
+	LM_INFO("alias already present and points to another connection "
+			"(%d : %d and %d : %d)\n", a->parent->id,  port, id, port);
 	TCPCONN_UNLOCK;
-	LM_ERR("possible port hijack attempt\n");
-	LM_ERR("alias already present and points to another connection "
-			"(%d : %d and %d : %d)\n", a->parent->id,  port, c->id, port);
 	return -1;
 }
 
@@ -1174,7 +1174,6 @@ get_fd:
 				if (n == -2) {
 					/* write chunk buffer reached max - close this
 					 * connection now */
-					tcpconn_put(c);
 					c->state=S_CONN_BAD;
 					c->timeout=0;
 					/* tell "main" it should drop this */
@@ -1910,7 +1909,7 @@ inline static int handle_ser_child(struct process_table* p, int fd_i)
 			break;
 		case ASYNC_WRITE:
 			if (tcpconn->state==S_CONN_BAD){
-				tcpconn_destroy(tcpconn);
+				tcpconn->timeout=0;
 				break;
 			}
 			/* update the timeout (lifetime) */

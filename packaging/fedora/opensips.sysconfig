@@ -1,2 +1,5 @@
-# Add extra options here
+#
+# OpenSIPS variables
+#
+
 OPTIONS=""

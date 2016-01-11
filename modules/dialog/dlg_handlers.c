@@ -833,7 +833,6 @@ void dlg_onreq(struct cell* t, int type, struct tmcb_params *param)
 	}
 }
 
-
 int dlg_create_dialog(struct cell* t, struct sip_msg *req,unsigned int flags)
 {
 	struct dlg_cell *dlg;
@@ -908,7 +907,7 @@ int dlg_create_dialog(struct cell* t, struct sip_msg *req,unsigned int flags)
 	if (replication_dests)
 		types |= TMCB_RESPONSE_OUT;
 
-	if ( d_tmb.register_tmcb( req, t,types,dlg_onreply, 
+	if ( d_tmb.register_tmcb( req, t,types,dlg_onreply,
 	(void*)dlg, unreference_dialog_create)<0 ) {
 		LM_ERR("failed to register TMCB\n");
 		goto error;
@@ -1279,15 +1278,28 @@ after_unlock5:
 				if (dlg->legs[dst_leg].last_gen_cseq) {
 
 					update_val = ++(dlg->legs[dst_leg].last_gen_cseq);
+
+					if (req->first_line.u.request.method_value == METHOD_INVITE) {
+						/* save INVITE cseq, in case any requests follow after this
+						( pings or other in-dialog requests until the ACK comes in */
+						dlg->legs[dst_leg].last_inv_gen_cseq = dlg->legs[dst_leg].last_gen_cseq;
+					}
+
 					dlg_unlock( d_table, d_entry );
 
 					if (update_msg_cseq(req,0,update_val) != 0) {
 						LM_ERR("failed to update sequential request msg cseq\n");
 						ok = 0;
 					}
-				}
-				else
+				} else {
+					if (req->first_line.u.request.method_value == METHOD_INVITE) {
+						/* we did not generate any pings yet - still we need to store the INV cseq,
+						in case there's a race between the ACK for the INVITE and sending of new pings */
+						str2int(&((struct cseq_body *)req->cseq->parsed)->number,
+						&dlg->legs[dst_leg].last_inv_gen_cseq);
+					}
 					dlg_unlock( d_table, d_entry );
+				}
 			}
 
 			if (ok) {
@@ -1298,23 +1310,24 @@ after_unlock5:
 				if (replication_dests)
 					replicate_dialog_updated(dlg);
 			}
-		}
-		else
-		{
+		} else {
 			if (dlg->flags & DLG_FLAG_PING_CALLER ||
 					dlg->flags & DLG_FLAG_PING_CALLEE) {
 
 				dlg_lock (d_table, d_entry);
 
-				if (dlg->legs[dst_leg].last_gen_cseq) {
-					update_val = dlg->legs[dst_leg].last_gen_cseq;
+				if (dlg->legs[dst_leg].last_gen_cseq ||
+				dlg->legs[dst_leg].last_inv_gen_cseq) {
+					if (dlg->legs[dst_leg].last_inv_gen_cseq)
+						update_val = dlg->legs[dst_leg].last_inv_gen_cseq;
+					else
+						update_val = dlg->legs[dst_leg].last_gen_cseq;
 					dlg_unlock( d_table, d_entry );
 
 					if (update_msg_cseq(req,0,update_val) != 0) {
 						LM_ERR("failed to update ACK msg cseq\n");
 					}
-				}
-				else
+				} else
 					dlg_unlock( d_table, d_entry );
 			}
 		}
@@ -1758,7 +1771,11 @@ int dlg_validate_dialog( struct sip_msg* req, struct dlg_cell *dlg)
 		}
 	} else {
 		if ( str2int( &((get_cseq(req))->number), &n)!=0 ||
-		str2int( &(leg->prev_cseq), &m)!=0 || n<=m ) {
+		(leg->prev_cseq.s ?
+			str2int( &(leg->prev_cseq), &m)!=0 :
+			str2int( &(leg->r_cseq), &m)!=0
+		 ) ||
+		n<=m ) {
 			LM_DBG("cseq test falied recv=%d, old=%d\n",n,m);
 			return -1;
 		}
