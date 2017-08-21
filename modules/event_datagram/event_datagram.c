@@ -21,16 +21,21 @@
  * history:
  * ---------
  *  2011-05-xx  created (razvancrainea)
+ *  2017-08-21  add json serializer (wxf)
  */
 
 #include "../../sr_module.h"
 #include "../../evi/evi_transport.h"
 #include "../../resolve.h"
 #include "../../ut.h"
+
 #include "event_datagram.h"
-#include <string.h>
-#include <fcntl.h>
+#include "event_json.h"
+#include "event_plain.h"
+
 #include <arpa/inet.h>
+#include <fcntl.h>
+#include <string.h>
 
 
 #if !defined(AF_LOCAL)
@@ -43,8 +48,9 @@
 
 /* unix and udp sockets */
 static struct dgram_socks sockets;
+
 /* send buffer */
-static char dgram_buffer[DGRAM_BUFFER_SIZE];
+char dgram_buffer[DGRAM_BUFFER_SIZE];
 static int dgram_buffer_len;
 
 /**
@@ -65,6 +71,15 @@ static int datagram_match(evi_reply_sock *sock1, evi_reply_sock *sock2);
 static str datagram_print(evi_reply_sock *sock);
 
 /**
+ * parameters exports
+ */
+str event_serializer = { NULL, 0 };
+static param_export_t ev_datagram_params[] = {
+	{ "event_serializer", STR_PARAM, &event_serializer.s },
+	{ 0, 0, 0 }
+};
+
+/**
  * module exports
  */
 struct module_exports exports= {
@@ -72,7 +87,7 @@ struct module_exports exports= {
 	MODULE_VERSION,
 	DEFAULT_DLFLAGS,			/* dlopen flags */
 	0,							/* exported functions */
-	0,							/* exported parameters */
+	ev_datagram_params,			/* exported parameters */
 	0,							/* exported statistics */
 	0,							/* exported MI functions */
 	0,							/* exported pseudo-variables */
@@ -107,6 +122,9 @@ static evi_export_t trans_export_unix = {
 	DGRAM_UNIX_FLAG				/* flags */
 };
 
+typedef int (serialize_f)(str *ev_name, evi_params_p ev_params);
+static serialize_f *serialize_dgram_event = NULL;
+
 /**
  * init module function
  */
@@ -123,6 +141,18 @@ static int mod_init(void)
 		LM_ERR("cannot register transport functions for UNIX\n");
 		return -1;
 	}
+
+	if (event_serializer.s)
+		event_serializer.len = strlen(event_serializer.s);
+	else
+		event_serializer = serializer_name_plain;
+
+	if ((event_serializer.len == serializer_name_json.len)
+		&& !memcmp(event_serializer.s, serializer_name_json.s, event_serializer.len))
+		serialize_dgram_event = serialize_json;
+	else
+		serialize_dgram_event = serialize_plain;
+
 	return 0;
 }
 
@@ -291,96 +321,25 @@ end:
 }
 #undef DO_PRINT
 
-#define DO_COPY(buff, str, len) \
-	do { \
-		if ((buff) - dgram_buffer + 1 > DGRAM_BUFFER_SIZE) { \
-			LM_ERR("buffer too small\n"); \
-			return -1; \
-		} \
-		memcpy((buff), (str), (len)); \
-		buff += (len); \
-	} while (0)
-
 /* builds parameters list */
-static int datagram_build_params(str* ev_name, evi_params_p ev_params)
+static int datagram_build_params(str *ev_name, evi_params_p ev_params)
 {
-	evi_param_p node;
-	int len;
-	char *buff, *int_s, *p, *end, *old;
-	char quote = QUOTE_C, esc = ESC_C;
-
 	if (ev_params && ev_params->flags & (DGRAM_UDP_FLAG | DGRAM_UNIX_FLAG)) {
 		LM_DBG("buffer already built\n");
 		return dgram_buffer_len;
 	}
 
-	dgram_buffer_len = 0;
-
-	/* first is event name - cannot be larger than the buffer size */
-	memcpy(dgram_buffer, ev_name->s, ev_name->len);
-	dgram_buffer[ev_name->len] = PARAM_SEP;
-	buff = dgram_buffer + ev_name->len + 1;
-	dgram_buffer_len = ev_name->len + 1;
-
-	if (!ev_params)
-		goto end;
-
-	for (node = ev_params->first; node; node = node->next) {
-		/* parameter name */
-		if (node->name.len && node->name.s) {
-			DO_COPY(buff, node->name.s, node->name.len);
-			DO_COPY(buff, ATTR_SEP_S, ATTR_SEP_LEN);
-		}
-
-		if (node->flags & EVI_STR_VAL) {
-			/* it is a string value */
-			if (node->val.s.len && node->val.s.s) {
-				len++;
-				/* check to see if enclose is needed */
-				end = node->val.s.s + node->val.s.len;
-				for (p = node->val.s.s; p < end; p++)
-					if (*p == PARAM_SEP)
-						break;
-				if (p == end) {
-					/* copy the whole buffer */
-					DO_COPY(buff, node->val.s.s, node->val.s.len);
-				} else {
-					DO_COPY(buff, &quote, 1);
-					old = node->val.s.s;
-					/* search for '"' to escape */
-					for (p = node->val.s.s; p < end; p++)
-						if (*p == QUOTE_C) {
-							DO_COPY(buff, old, p - old);
-							DO_COPY(buff, &esc, 1);
-							old = p;
-						}
-					/* copy the rest of the string */
-					DO_COPY(buff, old, p - old);
-					DO_COPY(buff, &quote, 1);
-				}
-			}
-		} else if (node->flags & EVI_INT_VAL) {
-			int_s = int2str(node->val.n, &len);
-			DO_COPY(buff, int_s, len);
-		} else {
-			LM_DBG("unknown parameter type [%x]\n", node->flags);
-		}
-		*buff = PARAM_SEP;
-		buff++;
+	dgram_buffer_len = serialize_dgram_event(ev_name, ev_params);
+	if (dgram_buffer_len < 0) {
+		LM_ERR("error while building parameters list\n");
+		return -1;
 	}
 
-end:
-	*buff = PARAM_SEP;
-	buff++;
-
-	/* set buffer len */
-	dgram_buffer_len = buff - dgram_buffer;
 	if (ev_params)
 		ev_params->flags |= (DGRAM_UDP_FLAG | DGRAM_UNIX_FLAG);
+
 	return dgram_buffer_len;
 }
-
-#undef DO_COPY
 
 static int datagram_raise(struct sip_msg *msg, str* ev_name,
 						  evi_reply_sock *sock, evi_params_t *params)

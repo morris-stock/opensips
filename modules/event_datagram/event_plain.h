@@ -16,43 +16,16 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
- *
- *
- * history:
- * ---------
- *  2011-05-xx  created (razvancrainea)
  */
 
-
-#ifndef _EV_DATAGRAM_H_
-#define _EV_DATAGRAM_H_
-
-/* transport protocols name */
-#define UDP_NAME	"udp"
-#define UDP_STR		{ UDP_NAME, sizeof(UDP_NAME) - 1}
-#define UNIX_NAME	"unix"
-#define UNIX_STR	{ UNIX_NAME, sizeof(UNIX_NAME) - 1}
-/* module flag */
-#define DGRAM_UDP_FLAG		(1 << 30)
-#define DGRAM_UNIX_FLAG		(1 << 29)
+#ifndef _EV_SERIALIZER_PLAIN_H_
+#define _EV_SERIALIZER_PLAIN_H_
 
 
-/* default buffer size */
-#define DGRAM_BUFFER_SIZE	16384
+#include "../../evi/evi_params.h"
 
-/* separation char */
-#define COLON_C				':'
-#define PARAM_SEP			'\n'
-#define QUOTE_C				'"'
-#define ESC_C				'\\'
-#define ATTR_SEP_S			"::"
-#define ATTR_SEP_LEN		(sizeof(ATTR_SEP_S) - 1)
+extern str serializer_name_plain;
 
-struct dgram_socks {
-	int udp_sock;
-	int unix_sock;
-};
+int serialize_plain(str *ev_name, evi_params_p ev_params);
 
-extern char dgram_buffer[DGRAM_BUFFER_SIZE];
-
-#endif
+#endif // _EV_SERIALIZER_PLAIN_H_
