@@ -1,8 +1,6 @@
 /*
  * $Id$
  *
- * Copyright (C) 2007 Voice Sistem SRL
- *
  * This file is part of opensips, a free SIP server.
  *
  * opensips is free software; you can redistribute it and/or modify
@@ -18,43 +16,17 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
- *
- *
- * History:
- * ---------
- *  2007-06-25  first version (ancuta)
  */
 
-#ifndef _MI_DATAGRAM_H_
-#define _MI_DATAGRAM_H_
+#ifndef _MI_DATAGRAM_WRITER_JSON_H_
+#define _MI_DATAGRAM_WRITER_JSON_H_
 
-#include <sys/socket.h>
+#include "datagram_fnc.h"
+#include "../../mi/tree.h"
 
-#define DEFAULT_MI_REPLY_IDENT "\t"
-#define MI_CMD_SEPARATOR       ':'
+int mi_datagram_writer_json_init(unsigned int size);
 
-/* the 2-chars separator between name and value */
-#define MI_ATTR_VAL_SEP1 ':'
-#define MI_ATTR_VAL_SEP2 ':'
+int mi_datagram_json_write_tree(datagram_stream *dtgram, struct mi_root *tree);
+int mi_datagram_json_flush_tree(datagram_stream *dtgram, struct mi_root *tree);
 
-
-/* maximum size for the socket reply name */
-#define MAX_MI_FILENAME 128
-
-/* size of buffer used by parser to read and build the MI tree */
-#define MI_CHILD_NO	    1
-
-#include <sys/un.h>
-#include "../../ip_addr.h"
-
-typedef union{
-	union sockaddr_union udp_addr;
-	struct sockaddr_un   unix_addr;
-}sockaddr_dtgram;
-
-
-extern int mi_json_writer;
-
-#endif /* _MI_DATAGRAM */
-
-
+#endif /* _MI_DATAGRAM_WRITER_JSON_H_ */

@@ -67,4 +67,10 @@ int  mi_init_datagram_server(sockaddr_dtgram * address, unsigned int domain,
 								int uid, int gid );
 int mi_init_datagram_buffer();
 void mi_datagram_server(int rx_sock, int tx_sock);
+
+typedef int (datagram_write_tree_f)(datagram_stream *dtgram, struct mi_root *tree);
+
+extern datagram_write_tree_f *write_tree;
+extern mi_flush_f *flush_tree;
+
 #endif /*_DATAGRAM_FNC_H*/

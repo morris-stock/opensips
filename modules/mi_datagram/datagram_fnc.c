@@ -45,6 +45,7 @@
 #include "datagram_fnc.h"
 #include "mi_datagram_parser.h"
 #include "mi_datagram_writer.h"
+#include "mi_datagram_writer_json.h"
 
 /* solaris doesn't have SUN_LEN  */
 #ifndef SUN_LEN
@@ -80,6 +81,9 @@ static unsigned int mi_socket_domain;
 
 static int mi_sock_check(int fd, char* fname);
 
+
+datagram_write_tree_f *write_tree = NULL;
+mi_flush_f *flush_tree = NULL;
 
 
 int  mi_init_datagram_server(sockaddr_dtgram *addr, unsigned int socket_domain,
@@ -347,7 +351,7 @@ static void datagram_close_async(struct mi_root *mi_rpl,struct mi_handler *hdl,
 				goto err;
 			}
 			/*build the response*/
-			if(mi_datagram_write_tree(&dtgram , mi_rpl) != 0){
+			if (write_tree(&dtgram , mi_rpl) != 0) {
 				LM_ERR("failed to build the response\n");
 				goto err1;
 			}
@@ -518,7 +522,7 @@ void mi_datagram_server(int rx_sock, int tx_sock)
 
 		LM_DBG("done parsing the mi tree\n");
 		if ( (mi_rpl=run_mi_cmd(f, mi_cmd,
-		(mi_flush_f *)mi_datagram_flush_tree, &dtgram))==0 ) {
+		(mi_flush_f *)flush_tree, &dtgram))==0 ) {
 		/*error while running the command*/
 			LM_ERR("failed to process the command\n");
 			mi_send_dgram(tx_sock, MI_COMMAND_FAILED, MI_COMMAND_FAILED_LEN,
@@ -531,7 +535,7 @@ void mi_datagram_server(int rx_sock, int tx_sock)
 		LM_DBG("command process (%s)succeded\n",f->name.s);
 
 		if (mi_rpl!=MI_ROOT_ASYNC_RPL) {
-			if(mi_datagram_write_tree(&dtgram , mi_rpl) != 0){
+			if(write_tree(&dtgram , mi_rpl) != 0){
 				LM_ERR("failed to build the response \n");
 				goto failure;
 			}

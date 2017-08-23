@@ -55,6 +55,7 @@
 #include "datagram_fnc.h"
 #include "mi_datagram_parser.h"
 #include "mi_datagram_writer.h"
+#include "mi_datagram_writer_json.h"
 
 
 /* AF_LOCAL is not defined on solaris */
@@ -93,6 +94,9 @@ static int  mi_unix_socket_gid = -1;
 static char *mi_unix_socket_gid_s = 0;
 static int mi_unix_socket_mode = S_IRUSR| S_IWUSR| S_IRGRP| S_IWGRP;
 
+/* json or not */
+int mi_json_writer = 0;
+
 /* mi specific parameters */
 static char *mi_reply_indent = DEFAULT_MI_REPLY_IDENT;
 
@@ -118,6 +122,7 @@ static param_export_t mi_params[] = {
 	{"unix_socket_user",    STR_PARAM,    &mi_unix_socket_uid_s     },
 	{"unix_socket_user",    INT_PARAM,    &mi_unix_socket_uid       },
 	{"reply_indent",        STR_PARAM,    &mi_reply_indent          },
+	{"json_writer",         INT_PARAM,    &mi_json_writer           },
 	{0,0,0}
 };
 
@@ -260,10 +265,22 @@ static int mi_mod_init(void)
 static int mi_child_init(int rank)
 {
 	if (rank==PROC_TIMER || rank>0 ) {
-		if(mi_datagram_writer_init( DATAGRAM_SOCK_BUF_SIZE ,
-		mi_reply_indent )!= 0){
-			LM_CRIT("failed to initiate mi_datagram_writer\n");
-			return -1;
+		if (mi_json_writer != 0) {
+			if (mi_datagram_writer_json_init(DATAGRAM_SOCK_BUF_SIZE) != 0) {
+				LM_CRIT("failed to initiate mi_datagram_writer_json\n");
+				return -1;
+			}
+
+			write_tree = mi_datagram_json_write_tree;
+		} else {
+			if (mi_datagram_writer_init( DATAGRAM_SOCK_BUF_SIZE ,
+										 mi_reply_indent )!= 0) {
+				LM_CRIT("failed to initiate mi_datagram_writer\n");
+				return -1;
+			}
+
+			write_tree = mi_datagram_write_tree;
+			flush_tree = (mi_flush_f *)mi_datagram_flush_tree;
 		}
 	}
 	return 0;
@@ -302,10 +319,22 @@ static void datagram_process(int rank)
 		exit(-1);
 	}
 
-	if (mi_datagram_writer_init( DATAGRAM_SOCK_BUF_SIZE ,
-	mi_reply_indent )!= 0){
-		LM_CRIT("failed to initiate mi_datagram_writer\n");
-		exit(-1);
+	if (mi_json_writer != 0) {
+		if (mi_datagram_writer_json_init(DATAGRAM_SOCK_BUF_SIZE) != 0) {
+			LM_CRIT("failed to initiate mi_datagram_writer_json\n");
+			exit(-1);
+		}
+
+		write_tree = mi_datagram_json_write_tree;
+	} else {
+		if (mi_datagram_writer_init( DATAGRAM_SOCK_BUF_SIZE ,
+									 mi_reply_indent )!= 0){
+			LM_CRIT("failed to initiate mi_datagram_writer\n");
+			exit(-1);
+		}
+
+		write_tree = mi_datagram_write_tree;
+		flush_tree = (mi_flush_f *)mi_datagram_flush_tree;
 	}
 
 	mi_datagram_server(sockets.rx_sock, sockets.tx_sock);
@@ -346,5 +375,4 @@ static int mi_destroy(void)
 	return 0;
 error:
 	return -1;
-
 }
